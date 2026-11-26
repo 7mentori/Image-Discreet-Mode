@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Image Discreet Mode",
+  "version": "1.0.0",
+  "description": "Temporarily hide, fade, blur, or scale images on the current website without changing the page layout.",
+  "permissions": [
+    "storage",
+    "scripting",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Image Discreet Mode",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": [
+        "content/settings.js",
+        "content/image-engine.js",
+        "content/panel.js",
+        "content/content.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["panel/panel.css"],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

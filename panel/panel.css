@@ -1,0 +1,241 @@
+:host {
+  all: initial;
+  color-scheme: light;
+  font-family: Arial, "Noto Sans TC", sans-serif;
+}
+
+.idm-root {
+  all: initial;
+  display: block;
+  width: 304px;
+  color: #1e293b;
+  font-family: Arial, "Noto Sans TC", sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.idm-root *,
+.idm-root *::before,
+.idm-root *::after {
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.idm-region {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 12px;
+  height: 74px;
+  pointer-events: auto;
+}
+
+.idm-handle {
+  position: absolute;
+  z-index: 3;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 74px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(100, 116, 139, .45);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: rgba(241, 245, 249, .96);
+  color: #1e293b;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, .18);
+  transition: opacity .12s ease;
+}
+
+.idm-handle-mark {
+  display: block;
+  width: 2px;
+  height: 26px;
+  border-radius: 2px;
+  background: #64748b;
+}
+
+.idm-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 304px;
+  min-width: 304px;
+  overflow: hidden;
+  border: 1px solid rgba(100, 116, 139, .42);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .97);
+  color: #1e293b;
+  box-shadow: 0 10px 34px rgba(15, 23, 42, .25);
+  transform: translateX(100%);
+  transform-origin: right top;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform .18s cubic-bezier(.2,.75,.25,1), opacity .14s ease;
+  will-change: transform, opacity;
+}
+
+.idm-region.is-expanded {
+  width: 304px;
+  height: auto;
+  min-height: 74px;
+}
+
+.idm-region.is-expanded .idm-panel {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.idm-region.is-expanded .idm-handle {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.idm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 43px;
+  padding: 8px 10px 8px 13px;
+  border-bottom: 1px solid rgba(148, 163, 184, .25);
+  background: rgba(248, 250, 252, .92);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+
+.idm-header:active { cursor: grabbing; }
+.idm-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.idm-brand-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 7px;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 16px;
+  font-weight: 700;
+}
+.idm-title { overflow: hidden; color: #0f172a; font-size: 13px; font-weight: 700; white-space: nowrap; text-overflow: ellipsis; }
+.idm-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+.idm-controls { display: flex; flex-direction: column; gap: 12px; padding: 13px 14px 14px; }
+.idm-switch-row, .idm-setting-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 25px; }
+.idm-switch-row label, .idm-setting-label, .idm-label-line label { color: #334155; font-size: 12px; font-weight: 600; }
+.idm-switch {
+  position: relative;
+  display: inline-block;
+  width: 38px;
+  height: 21px;
+  flex: 0 0 38px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.idm-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .25);
+  transition: transform .12s ease;
+}
+.idm-switch.is-on { background: #2563eb; }
+.idm-switch.is-on .idm-switch-knob { transform: translateX(17px); }
+.idm-control-row { display: flex; flex-direction: column; gap: 5px; }
+.idm-label-line { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.idm-label-line output { min-width: 42px; color: #0f172a; font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; text-align: right; }
+.idm-control-row input[type="range"] {
+  display: block;
+  width: 100%;
+  height: 17px;
+  margin: 0;
+  padding: 0;
+  accent-color: #2563eb;
+  background: transparent;
+  cursor: pointer;
+}
+.idm-theme-button {
+  min-width: 74px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.idm-disable-button {
+  width: 100%;
+  min-height: 34px;
+  margin: 2px 0 0;
+  padding: 7px 10px;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  background: #fff1f2;
+  color: #9f1239;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.idm-icon-button:hover, .idm-theme-button:hover { filter: brightness(.97); }
+.idm-disable-button:hover { background: #ffe4e6; }
+.idm-icon-button:focus-visible, .idm-theme-button:focus-visible, .idm-disable-button:focus-visible, .idm-switch:focus-visible, .idm-handle:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+
+/* Dark theme: every control has an explicit foreground/background pair. */
+.idm-root[data-theme="dark"] { color: #e2e8f0; }
+.idm-root[data-theme="dark"] .idm-panel { border-color: rgba(148, 163, 184, .3); background: rgba(15, 23, 42, .98); color: #e2e8f0; }
+.idm-root[data-theme="dark"] .idm-header { border-bottom-color: rgba(148, 163, 184, .2); background: rgba(30, 41, 59, .96); }
+.idm-root[data-theme="dark"] .idm-title,
+.idm-root[data-theme="dark"] .idm-switch-row label,
+.idm-root[data-theme="dark"] .idm-setting-label,
+.idm-root[data-theme="dark"] .idm-label-line label,
+.idm-root[data-theme="dark"] .idm-label-line output { color: #f1f5f9; }
+.idm-root[data-theme="dark"] .idm-icon-button,
+.idm-root[data-theme="dark"] .idm-theme-button { border-color: #475569; background: #334155; color: #f8fafc; }
+.idm-root[data-theme="dark"] .idm-disable-button { border-color: #9f1239; background: #4c0519; color: #ffe4e6; }
+.idm-root[data-theme="dark"] .idm-disable-button:hover { background: #881337; }
+.idm-root[data-theme="dark"] .idm-handle { border-color: rgba(148, 163, 184, .45); background: rgba(30, 41, 59, .97); }
+.idm-root[data-theme="dark"] .idm-handle-mark { background: #cbd5e1; }
+.idm-root[data-theme="dark"] .idm-brand-icon { background: #1e3a8a; color: #dbeafe; }
+.idm-root[data-theme="dark"] .idm-switch { background: #475569; }
+.idm-root[data-theme="dark"] .idm-switch.is-on { background: #3b82f6; }
+.idm-root[data-theme="dark"] input[type="range"] { accent-color: #60a5fa; }
+
+@media (prefers-reduced-motion: reduce) {
+  .idm-panel, .idm-switch, .idm-switch-knob, .idm-handle { transition-duration: .01ms !important; }
+}
