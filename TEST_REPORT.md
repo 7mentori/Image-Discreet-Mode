@@ -40,3 +40,13 @@ The Service Worker action-routing code and hostname storage isolation were addit
 ## Known functional limits
 
 The extension does not process Canvas, WebGL/WebGPU, video frames, pseudo-element backgrounds, cross-origin iframe DOM, or nodes inside shadow roots. CSS background handling is best-effort and may affect containing blocks or structural selectors as documented in `README.md`.
+
+
+## Reset Default feature update
+
+- Added a bilingual `Reset Default` button below the image controls.
+- Restores current-host image settings to `hidden: false`, `opacity: 100`, `blur: 0`, and `scale: 100`.
+- Updates the controls and image preview immediately, then saves the reset values through the existing per-host settings queue.
+- Clears any pending debounced slider patch before saving, preventing stale slider values from overwriting the reset.
+- Leaves global theme, panel opacity, and the site's disabled flag unchanged.
+- JavaScript syntax and packaged file checks are rerun for this update; real Chrome toolbar testing remains a manual verification item.

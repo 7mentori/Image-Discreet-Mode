@@ -109,3 +109,8 @@ The release archive is checked for:
 - ZIP archive integrity and expected project structure.
 
 See [`TEST_REPORT.md`](TEST_REPORT.md) for the static checks, Chromium DOM harness results, mocked Chrome API checks, and the remaining real-extension verification gap. The harness exercises the actual project modules in Chromium, but it is not a substitute for installing the unpacked extension in a normal Chrome profile and clicking the real toolbar action.
+
+
+### Reset Default
+
+The Reset Default button restores only the current website image settings: images visible, opacity 100%, blur 0px, and scale 100%. It does not change the global panel theme, panel opacity, or the website disabled state.

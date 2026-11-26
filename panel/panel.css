@@ -199,6 +199,23 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+.idm-reset-button {
+  width: 100%;
+  min-height: 32px;
+  margin: -2px 0 0;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.idm-reset-button:hover { background: #e2e8f0; }
+.idm-reset-button:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+
 .idm-disable-button {
   width: 100%;
   min-height: 34px;
@@ -214,7 +231,7 @@
 }
 .idm-icon-button:hover, .idm-theme-button:hover { filter: brightness(.97); }
 .idm-disable-button:hover { background: #ffe4e6; }
-.idm-icon-button:focus-visible, .idm-theme-button:focus-visible, .idm-disable-button:focus-visible, .idm-switch:focus-visible, .idm-handle:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
+.idm-icon-button:focus-visible, .idm-theme-button:focus-visible, .idm-disable-button:focus-visible, .idm-reset-button:focus-visible, .idm-switch:focus-visible, .idm-handle:focus-visible { outline: 2px solid #3b82f6; outline-offset: 2px; }
 
 /* Dark theme: every control has an explicit foreground/background pair. */
 .idm-root[data-theme="dark"] { color: #e2e8f0; }
@@ -227,7 +244,9 @@
 .idm-root[data-theme="dark"] .idm-label-line output { color: #f1f5f9; }
 .idm-root[data-theme="dark"] .idm-icon-button,
 .idm-root[data-theme="dark"] .idm-theme-button { border-color: #475569; background: #334155; color: #f8fafc; }
-.idm-root[data-theme="dark"] .idm-disable-button { border-color: #9f1239; background: #4c0519; color: #ffe4e6; }
+.idm-root[data-theme="dark"] .idm-reset-button { border-color: #475569; background: #334155; color: #f8fafc; }
+.idm-root[data-theme="dark"] .idm-reset-button:hover { background: #475569; }
+.idm-disable-button { border-color: #9f1239; background: #4c0519; color: #ffe4e6; }
 .idm-root[data-theme="dark"] .idm-disable-button:hover { background: #881337; }
 .idm-root[data-theme="dark"] .idm-handle { border-color: rgba(148, 163, 184, .45); background: rgba(30, 41, 59, .97); }
 .idm-root[data-theme="dark"] .idm-handle-mark { background: #cbd5e1; }

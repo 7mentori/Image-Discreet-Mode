@@ -10,6 +10,7 @@
       imageOpacity: '圖片透明度',
       blur: '圖片模糊',
       scale: '圖片縮放',
+      resetDefault: 'Reset Default',
       theme: '主題',
       light: '淺色',
       dark: '深色',
@@ -27,6 +28,7 @@
       imageOpacity: 'Image opacity',
       blur: 'Blur',
       scale: 'Scale',
+      resetDefault: 'Reset Default',
       theme: 'Theme',
       light: 'Light',
       dark: 'Dark',
@@ -131,6 +133,7 @@
         blurValue: root.querySelector('#idm-blur-value'),
         scale: root.querySelector('#idm-scale'),
         scaleValue: root.querySelector('#idm-scale-value'),
+        resetDefault: root.querySelector('#idm-reset-default'),
         theme: root.querySelector('#idm-theme-toggle'),
         panelOpacity: root.querySelector('#idm-panel-opacity'),
         panelOpacityValue: root.querySelector('#idm-panel-opacity-value'),
@@ -190,6 +193,8 @@
                 <input id="idm-scale" type="range" min="10" max="300" step="1" value="100">
               </div>
 
+              <button id="idm-reset-default" class="idm-reset-button" type="button">${escapeHtml(t.resetDefault)}</button>
+
               <div class="idm-setting-row">
                 <span class="idm-setting-label">${escapeHtml(t.theme)}</span>
                 <button id="idm-theme-toggle" class="idm-theme-button" type="button">${escapeHtml(t.light)}</button>
@@ -230,6 +235,8 @@
       this.bindRange(this.controls.scale, this.controls.scaleValue, 'scale', '%', false);
       this.bindRange(this.controls.panelOpacity, this.controls.panelOpacityValue, 'panelOpacity', '%', true);
 
+      this.controls.resetDefault.addEventListener('click', () => this.resetImageDefaults());
+
       this.controls.theme.addEventListener('click', () => {
         const theme = this.globalSettings.theme === 'light' ? 'dark' : 'light';
         this.globalSettings.theme = theme;
@@ -268,6 +275,18 @@
         if (isGlobal) this.flushGlobalSave();
         else this.flushSiteSave();
       });
+    }
+
+    resetImageDefaults() {
+      const defaults = { hidden: false, opacity: 100, blur: 0, scale: 100 };
+      // Discard any pending slider writes so they cannot overwrite the reset.
+      if (this.siteSaveTimer) clearTimeout(this.siteSaveTimer);
+      this.siteSaveTimer = null;
+      this.pendingSiteSave = null;
+      this.siteSettings = { ...this.siteSettings, ...defaults };
+      this.syncControls();
+      if (this.onSitePreview) this.onSitePreview(defaults);
+      if (this.onSiteChange) this.onSiteChange(defaults);
     }
 
     queueSiteSave(patch) {
