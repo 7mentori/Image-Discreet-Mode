@@ -9,6 +9,7 @@
     opacity: 100,
     blur: 0,
     scale: 100,
+    monochrome: false,
     disabled: false
   });
 
@@ -33,6 +34,7 @@
       opacity: clampNumber(settings.opacity, 0, 100, DEFAULT_SITE_SETTINGS.opacity),
       blur: clampNumber(settings.blur, 0, 20, DEFAULT_SITE_SETTINGS.blur),
       scale: clampNumber(settings.scale, 10, 300, DEFAULT_SITE_SETTINGS.scale),
+      monochrome: Boolean(settings.monochrome),
       disabled: Boolean(settings.disabled)
     };
   }

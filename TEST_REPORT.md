@@ -50,3 +50,13 @@ The extension does not process Canvas, WebGL/WebGPU, video frames, pseudo-elemen
 - Clears any pending debounced slider patch before saving, preventing stale slider values from overwriting the reset.
 - Leaves global theme, panel opacity, and the site's disabled flag unchanged.
 - JavaScript syntax and packaged file checks are rerun for this update; real Chrome toolbar testing remains a manual verification item.
+
+
+## Version 1.1.0 — Grayscale webpage feature update
+
+- Added per-hostname `monochrome` setting (default: false).
+- Added Traditional Chinese / English switch in the Shadow DOM panel.
+- Applies grayscale to `document.body`, leaving the extension host (mounted under `documentElement`, outside body) in color.
+- Saves and restores the original inline body filter value and priority.
+- Reset Default intentionally does not change monochrome mode.
+- Requires real-site verification for fixed/sticky page controls because CSS filter creates a containing block and stacking context.

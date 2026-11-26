@@ -13,6 +13,8 @@
       this.panel = null;
       this.initialized = false;
       this.disabling = false;
+      this.monochromeBody = null;
+      this.originalBodyFilter = null;
       this.siteWriteQueue = Promise.resolve();
       this._onStorageChanged = this.onStorageChanged.bind(this);
       this._onMessage = (message, sender, sendResponse) => {
@@ -39,6 +41,7 @@
         this.siteSettings = siteSettings;
         this.globalSettings = globalSettings;
         this.initialized = true;
+        this.applyMonochrome(this.siteSettings.monochrome);
 
         if (!this.siteSettings.disabled) this.activate({ showPanel: true });
 
@@ -78,10 +81,45 @@
       if (showPanel) this.panel.setVisible(true);
     }
 
+    applyMonochrome(enabled) {
+      const body = document.body;
+      if (!body) return;
+
+      // The extension host is a direct child of <html>, outside <body>, so it
+      // remains in full color while the actual webpage is rendered in grayscale.
+      if (this.monochromeBody && this.monochromeBody !== body) {
+        this.restoreMonochromeBody();
+      }
+
+      if (enabled) {
+        if (this.monochromeBody !== body) {
+          this.monochromeBody = body;
+          this.originalBodyFilter = {
+            value: body.style.getPropertyValue('filter'),
+            priority: body.style.getPropertyPriority('filter')
+          };
+        }
+        body.style.setProperty('filter', 'grayscale(1)', 'important');
+      } else {
+        this.restoreMonochromeBody();
+      }
+    }
+
+    restoreMonochromeBody() {
+      if (!this.monochromeBody) return;
+      const body = this.monochromeBody;
+      const original = this.originalBodyFilter || { value: '', priority: '' };
+      if (original.value) body.style.setProperty('filter', original.value, original.priority);
+      else body.style.removeProperty('filter');
+      this.monochromeBody = null;
+      this.originalBodyFilter = null;
+    }
+
     previewSiteSettings(patch) {
       if (this.disabling || this.siteSettings.disabled) return;
       this.siteSettings = IDMSettings.normalizeSiteSettings({ ...this.siteSettings, ...patch });
       if (this.imageEngine) this.imageEngine.setSettings(this.siteSettings);
+      this.applyMonochrome(this.siteSettings.monochrome);
     }
 
     updateSiteSettings(patch) {
@@ -93,6 +131,7 @@
         if (this.disabling || this.siteSettings.disabled) return;
         this.siteSettings = next;
         if (this.imageEngine) this.imageEngine.setSettings(next);
+        this.applyMonochrome(next.monochrome);
         if (this.panel) this.panel.updateSiteSettings(next);
       });
       return this.siteWriteQueue;
@@ -108,6 +147,7 @@
       if (this.disabling || this.siteSettings.disabled) return;
       this.disabling = true;
       this.siteSettings = { ...this.siteSettings, disabled: true };
+      this.applyMonochrome(false);
 
       // Remove the complete UI synchronously before waiting for storage I/O.
       if (this.panel) {
@@ -181,6 +221,7 @@
         this.siteSettings = IDMSettings.normalizeSiteSettings(changes[siteKey].newValue);
 
         if (this.siteSettings.disabled) {
+          this.applyMonochrome(false);
           if (!this.disabling) {
             if (this.panel) this.panel.destroy();
             this.panel = null;
@@ -190,6 +231,7 @@
           return;
         }
 
+        this.applyMonochrome(this.siteSettings.monochrome);
         if (previousDisabled && !this.siteSettings.disabled) {
           this.activate({ showPanel: true });
           return;
@@ -212,6 +254,7 @@
       this.panel = null;
       if (this.imageEngine) this.imageEngine.destroy();
       this.imageEngine = null;
+      this.applyMonochrome(false);
 
       try {
         await this.siteWriteQueue.catch(() => {});
@@ -222,6 +265,7 @@
         ]);
         this.siteSettings = siteSettings;
         this.globalSettings = globalSettings;
+        this.applyMonochrome(this.siteSettings.monochrome);
         if (!this.siteSettings.disabled) this.activate({ showPanel: true });
       } catch (error) {
         console.error('[Image Discreet Mode] Hostname switch failed:', error);

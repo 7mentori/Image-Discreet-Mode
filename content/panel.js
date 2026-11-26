@@ -11,6 +11,7 @@
       blur: '圖片模糊',
       scale: '圖片縮放',
       resetDefault: 'Reset Default',
+      monochrome: '網頁灰階',
       theme: '主題',
       light: '淺色',
       dark: '深色',
@@ -29,6 +30,7 @@
       blur: 'Blur',
       scale: 'Scale',
       resetDefault: 'Reset Default',
+      monochrome: 'Grayscale webpage',
       theme: 'Theme',
       light: 'Light',
       dark: 'Dark',
@@ -134,6 +136,7 @@
         scale: root.querySelector('#idm-scale'),
         scaleValue: root.querySelector('#idm-scale-value'),
         resetDefault: root.querySelector('#idm-reset-default'),
+        monochrome: root.querySelector('#idm-monochrome'),
         theme: root.querySelector('#idm-theme-toggle'),
         panelOpacity: root.querySelector('#idm-panel-opacity'),
         panelOpacityValue: root.querySelector('#idm-panel-opacity-value'),
@@ -195,6 +198,11 @@
 
               <button id="idm-reset-default" class="idm-reset-button" type="button">${escapeHtml(t.resetDefault)}</button>
 
+              <div class="idm-switch-row">
+                <label for="idm-monochrome">${escapeHtml(t.monochrome)}</label>
+                <button id="idm-monochrome" class="idm-switch" type="button" role="switch" aria-checked="false"><span class="idm-switch-knob"></span></button>
+              </div>
+
               <div class="idm-setting-row">
                 <span class="idm-setting-label">${escapeHtml(t.theme)}</span>
                 <button id="idm-theme-toggle" class="idm-theme-button" type="button">${escapeHtml(t.light)}</button>
@@ -236,6 +244,15 @@
       this.bindRange(this.controls.panelOpacity, this.controls.panelOpacityValue, 'panelOpacity', '%', true);
 
       this.controls.resetDefault.addEventListener('click', () => this.resetImageDefaults());
+
+      this.controls.monochrome.addEventListener('click', () => {
+        const monochrome = !this.siteSettings.monochrome;
+        this.siteSettings.monochrome = monochrome;
+        this.syncControls();
+        if (this.onSitePreview) this.onSitePreview({ monochrome });
+        this.queueSiteSave({ monochrome });
+        this.flushSiteSave();
+      });
 
       this.controls.theme.addEventListener('click', () => {
         const theme = this.globalSettings.theme === 'light' ? 'dark' : 'light';
@@ -483,6 +500,8 @@
     syncControls() {
       this.controls.hideImages.setAttribute('aria-checked', String(this.siteSettings.hidden));
       this.controls.hideImages.classList.toggle('is-on', this.siteSettings.hidden);
+      this.controls.monochrome.setAttribute('aria-checked', String(this.siteSettings.monochrome));
+      this.controls.monochrome.classList.toggle('is-on', this.siteSettings.monochrome);
       this.controls.opacity.value = String(this.siteSettings.opacity);
       this.controls.opacityValue.value = `${this.siteSettings.opacity}%`;
       this.controls.opacityValue.textContent = `${this.siteSettings.opacity}%`;

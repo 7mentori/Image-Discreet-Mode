@@ -4,7 +4,9 @@ A Manifest V3 Chrome extension for temporarily hiding, fading, blurring, or visu
 
 ## Features
 
-- Per-hostname image settings: hide, opacity (0–100%), blur (0–20px), and visual scale (10–300%).
+- **New in 1.1.0:** Per-site grayscale mode to desaturate colorful webpage content while keeping the extension panel in color.
+
+- Per-hostname image settings: hide, opacity (0–100%), blur (0–20px), visual scale (10–300%), and webpage grayscale mode.
 - Supports HTML `img`, `input[type="image"]`, and many ordinary CSS `background-image` use cases.
 - Detects dynamically inserted elements and common `src`, `srcset`, `class`, and inline-style changes.
 - Floating Shadow DOM panel with drag support, hover expansion/collapse, light/dark themes, and whole-panel opacity.
@@ -15,7 +17,7 @@ A Manifest V3 Chrome extension for temporarily hiding, fading, blurring, or visu
 
 ## Installation (load unpacked)
 
-1. Download and extract `Image-Discreet-Mode-1.0.0.zip`.
+1. Download and extract `Image-Discreet-Mode-1.1.0.zip`.
 2. Open `chrome://extensions` in Chrome.
 3. Enable **Developer mode**.
 4. Select **Load unpacked**.
@@ -29,7 +31,7 @@ The extension intentionally does not define `action.default_popup`, so the toolb
 - Move the pointer over the 12px handle at the upper-right edge to expand the panel.
 - Move the pointer outside the expanded panel to collapse it automatically.
 - Drag the panel header to move the expanded panel. Collapsing always returns it to the right edge; the next expansion starts from that edge.
-- Use **Hide images**, **Image opacity**, **Blur**, and **Scale** to adjust the current hostname.
+- Use **Hide images**, **Image opacity**, **Blur**, and **Scale** to adjust the current hostname. **Grayscale webpage** converts the page content to monochrome while keeping the extension panel in color.
 - Theme and panel opacity are global settings. Panel opacity applies to the host itself, so the background and all child controls become transparent together.
 - **Disable on this site** immediately removes the panel and restores image effects. Click the extension toolbar icon to re-enable the current site.
 - Clicking the toolbar icon on a normal site toggles panel visibility. Hiding the panel does not disable image processing.
@@ -40,7 +42,7 @@ Chrome `storage.local` is used.
 
 | Key | Scope | Stored data |
 |---|---|---|
-| `siteSettings:<hostname>` | Per hostname | `hidden`, `opacity`, `blur`, `scale`, `disabled` |
+| `siteSettings:<hostname>` | Per hostname | `hidden`, `opacity`, `blur`, `scale`, `monochrome`, `disabled` |
 | `globalSettings` | Global | `theme`, `panelOpacity` |
 
 The hostname key deliberately excludes URL paths, query strings, and ports. Different hostnames remain independent. Disabling a site does not delete its image settings.
@@ -113,4 +115,8 @@ See [`TEST_REPORT.md`](TEST_REPORT.md) for the static checks, Chromium DOM harne
 
 ### Reset Default
 
-The Reset Default button restores only the current website image settings: images visible, opacity 100%, blur 0px, and scale 100%. It does not change the global panel theme, panel opacity, or the website disabled state.
+The Reset Default button restores only the current website image settings: images visible, opacity 100%, blur 0px, and scale 100%. It does not change grayscale mode, the global panel theme, panel opacity, or the website disabled state.
+
+### Grayscale webpage
+
+The per-site Grayscale webpage switch applies `filter: grayscale(1)` to the document body. This removes color saturation from text, backgrounds, borders, icons, and other rendered page content while preserving luminance differences as shades of gray. The extension panel is mounted as a sibling of `<body>` under `<html>`, so it remains in its normal theme colors. The original inline `body` filter value and priority are saved and restored when the feature is turned off. Because CSS filters create a containing block and stacking context, some websites with fixed-position or sticky UI may display those elements differently while grayscale mode is enabled.
