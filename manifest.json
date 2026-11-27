@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Image Discreet Mode",
-  "version": "1.1.0",
-  "description": "Temporarily hide, fade, blur, or scale images on the current website without changing the page layout.",
+  "version": "1.2.0",
+  "description": "Temporarily hide, fade, blur, scale and desaturate webpage visuals.",
   "permissions": [
     "storage",
+    "activeTab",
     "scripting",
     "tabs"
   ],
@@ -18,7 +19,9 @@
     "default_title": "Image Discreet Mode",
     "default_icon": {
       "16": "icons/icon16.png",
-      "32": "icons/icon32.png"
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
     }
   },
   "icons": {
@@ -29,27 +32,26 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "<all_urls>"
-      ],
+      "matches": ["<all_urls>"],
+      "run_at": "document_start",
+      "css": ["content/page-effects.css"],
       "js": [
+        "content/namespace.js",
         "content/settings.js",
+        "content/i18n.js",
         "content/image-engine.js",
+        "content/grayscale.js",
+        "content/single-image.js",
         "content/panel.js",
-        "content/content.js"
+        "content/bootstrap.js"
       ],
-      "run_at": "document_idle",
       "all_frames": false
     }
   ],
   "web_accessible_resources": [
     {
-      "resources": [
-        "panel/panel.css"
-      ],
-      "matches": [
-        "<all_urls>"
-      ]
+      "resources": ["content/panel.css", "icons/*"],
+      "matches": ["<all_urls>"]
     }
   ]
 }

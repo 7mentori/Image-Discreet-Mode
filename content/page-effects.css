@@ -1,0 +1,40 @@
+/* CSS background-image pseudo-element layer. Parent text and controls are not filtered. */
+[data-idm-bg="1"]::before {
+  all: initial !important;
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: -1 !important;
+  display: block !important;
+  box-sizing: border-box !important;
+  pointer-events: none !important;
+  border-radius: inherit !important;
+  background-image: var(--idm-bg-image, none) !important;
+  background-size: var(--idm-bg-size, auto) !important;
+  background-position: var(--idm-bg-position, 0% 0%) !important;
+  background-repeat: var(--idm-bg-repeat, repeat) !important;
+  background-origin: var(--idm-bg-origin, padding-box) !important;
+  background-clip: var(--idm-bg-clip, border-box) !important;
+  background-attachment: var(--idm-bg-attachment, scroll) !important;
+  background-blend-mode: var(--idm-bg-blend, normal) !important;
+  opacity: var(--idm-bg-final-opacity, 1) !important;
+  filter: var(--idm-bg-final-filter, none) !important;
+  transform: var(--idm-bg-final-transform, none) !important;
+  transform-origin: center center !important;
+}
+
+[data-idm-grayscale-overlay="1"] {
+  position: fixed !important;
+  inset: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  pointer-events: none !important;
+  z-index: 2147483645 !important;
+  background: transparent !important;
+  -webkit-backdrop-filter: grayscale(1) !important;
+  backdrop-filter: grayscale(1) !important;
+}

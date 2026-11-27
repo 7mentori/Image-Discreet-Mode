@@ -1,62 +1,78 @@
-# Image Discreet Mode — Test Report
+# Image Discreet Mode v1.2.0 — 測試報告
 
-**Build:** 1.0.0  
-**Test date:** 2026-11-26  
-**Browser used for DOM tests:** Chromium 144.0.7559.96 (headless)
+## 測試結論
 
-## Result summary
+**靜態檢查通過**
 
-| Area | Result | What was verified |
+**目前不能標示 ALL PASS。** 專案已完成程式與封裝的靜態檢查，以及設定模組測試；但目前可用的 Chromium 環境受到管理政策限制，無法在一般網頁載入擴充功能，因此尚未完成真實 Chrome 的互動驗收。
+
+這個 Chromium 環境的管理政策包含：
+
+- `URLBlocklist: ["*"]`
+- `ExtensionInstallBlocklist: ["*"]`
+
+測試時瀏覽器導覽回傳 `ERR_BLOCKED_BY_ADMINISTRATOR`，擴充功能也無法安裝至測試 Profile。因此沒有把需要真實渲染或滑鼠事件的項目誤標為通過。
+
+## 已完成檢查
+
+| 檢查項目 | 結果 | 說明 |
 |---|---|---|
-| JavaScript syntax | PASS | `node --check` on all five JavaScript files |
-| Manifest and package references | PASS | Valid JSON, MV3, service worker, no action popup, required permissions, all referenced scripts/CSS/icons exist |
-| Settings module | PASS | Separate hostname keys; global theme and panel opacity persistence using a Chrome Storage mock |
-| Service worker routing | PASS (mock) | Normal-site action routes to panel toggle; disabled-site action clears `disabled` and routes to enable/show |
-| Panel hover and geometry | PASS (Chromium DOM harness) | Handle enter expands; pointer inside stays open; pointerleave auto-collapses without another mouse movement; expanded interaction region follows panel height |
-| Panel drag / right-edge reset | PASS (Chromium DOM harness) | Drag to center, collapse returns to right edge, next hover expansion starts from right edge |
-| Theme and panel opacity | PASS (Chromium DOM harness) | Dark theme control contrast and opacity applied to the complete Shadow Host |
-| HTML image effects | PASS (Chromium DOM harness) | `img`, `input[type=image]`, dynamic `img`, opacity, blur, scale, hidden state, and unchanged layout dimensions |
-| CSS background effects | PASS (Chromium DOM harness) | Overlay rendering, style mutation refresh, opacity/blur/scale, restoration of original inline background and layout dimensions |
-| Disable / re-enable flow | PASS (Chromium DOM harness + mocked storage/runtime) | Disable removes the complete host and image engine; pending slider value is saved; enable message restores a visible collapsed right-edge panel and retains the saved site setting |
-| Panel action toggle | PASS (Chromium DOM harness) | Toggle message hides and shows the collapsed panel |
-| ZIP archive | PASS | `unzip -t` and expected project entries checked after packaging |
+| Manifest JSON | PASS | `manifest.json` 可正常解析 |
+| Manifest 版本 | PASS | Manifest V3，擴充功能版本 `1.2.0` |
+| Chrome Action | PASS | 沒有設定 `default_popup`，由 `chrome.action.onClicked` 接收工具列點擊 |
+| JavaScript 語法 | PASS | `background.js` 及 8 個 Content Script 均通過 `node --check` |
+| Manifest 檔案參照 | PASS | Content Script、CSS、Service Worker、icons 等資源皆存在 |
+| Icon 檔案 | PASS | 16、32、48、128 px PNG 圖示尺寸正確 |
+| 設定模組測試 | PASS | 使用模擬 Chrome Storage API 測試預設值、hostname 隔離、數值驗證、全域設定及 Reset 範圍 |
+| ZIP 完整性 | PASS | 最終 ZIP 通過 `unzip -t`，無壓縮資料錯誤 |
 
-## Test method and important boundary
+## 尚未完成的 Chrome 互動驗收
 
-The project JavaScript modules and actual panel stylesheet were exercised in a Chromium 144 DOM harness. Pointer input was dispatched through Chromium's browser automation protocol. The harness supplied mock `chrome.storage` and `chrome.runtime` APIs so the content controller, settings, panel, and image engine could be exercised together.
+以下項目需要正常運作的 Chrome Extension Runtime 及一般網頁。本次環境政策阻止擴充功能載入，因此均標記為**未驗證**，不是 PASS：
 
-The Service Worker action-routing code and hostname storage isolation were additionally tested in Node with mocked Chrome APIs. These tests verify the project's routing and state logic, but they do not prove that Chrome's own extension service-worker lifecycle or the real toolbar action behaves identically in a normal installed profile.
+- Panel 首次載入、Hover 展開、離開 300ms 自動收合及滑鼠停留狀態。
+- Panel 拖曳、Pointer Capture，以及收合後回到最右側。
+- Panel 主題及整體透明度的實際視覺效果。
+- 此網站禁用、重新整理後持續禁用，以及工具列圖示重新啟用。
+- HTML `img`、`input[type=image]` 的實際顯示、原始樣式還原、動態來源變更及 Layout Box 尺寸。
+- CSS 背景 pseudo-element 圖層、文字保留、多背景圖層及不支援情境的跳過行為。
+- 單張圖片左鍵按住／放開、右鍵固定／取消、pointer cancel、lost pointer capture 及視窗失焦。
+- 灰階實際渲染，以及排除 Panel 和單張圖片操作 UI。
+- Reset Default 的實際網頁還原效果。
+- Chrome 中不同網站設定隔離及瀏覽器語系切換。
 
-**Not verified in this environment:** a complete `chrome://extensions` → **Load unpacked** installation followed by a real click on the browser toolbar icon. The available headless Chrome environment did not expose a usable extension service-worker target for that end-to-end test, and its local test-page navigation was blocked by the environment. Therefore this release is **not labelled ALL PASS** for real Chrome integration.
+## 已知限制
 
-## Manual acceptance still recommended
+完整說明請參考 `README.md`。重要限制如下：
 
-1. Load the extracted project folder in a normal Chrome desktop profile.
-2. Test toolbar action toggle on an enabled site.
-3. Disable the site, reload it, close/reopen its tab, then click the real toolbar icon to re-enable.
-4. Repeat on two hostnames and confirm their settings remain independent.
-5. Test on target sites with strict Content Security Policy, complex CSS backgrounds, and heavy SPA updates.
+- `html`、`body` 畫布背景會跳過 CSS 背景處理。
+- CSS 背景若已使用 `::before`、display 類型不適合、使用 fixed/local attachment、`background-clip:text`，或 static 元素包含可能受 containing block 影響的絕對定位子元素，會跳過。
+- 同一元素中的多個 CSS 背景圖層會視為一組控制。
+- 部分只透過 CSSOM 操作或動畫產生的背景圖片變化可能不會立即被偵測。
+- 不處理跨來源 iframe 及 Closed Shadow DOM 內部。
+- Canvas、WebGL、WebGPU、瀏覽器 Top Layer 及部分 GPU/compositor surface 不保證能完整套用所有效果。
+- 單張圖片暫時顯示與固定顯示狀態只在目前頁面工作階段有效。
 
-## Known functional limits
+## 驗收聲明
 
-The extension does not process Canvas, WebGL/WebGPU, video frames, pseudo-element backgrounds, cross-origin iframe DOM, or nodes inside shadow roots. CSS background handling is best-effort and may affect containing blocks or structural selectors as documented in `README.md`.
-
-
-## Reset Default feature update
-
-- Added a bilingual `Reset Default` button below the image controls.
-- Restores current-host image settings to `hidden: false`, `opacity: 100`, `blur: 0`, and `scale: 100`.
-- Updates the controls and image preview immediately, then saves the reset values through the existing per-host settings queue.
-- Clears any pending debounced slider patch before saving, preventing stale slider values from overwriting the reset.
-- Leaves global theme, panel opacity, and the site's disabled flag unchanged.
-- JavaScript syntax and packaged file checks are rerun for this update; real Chrome toolbar testing remains a manual verification item.
+此交付物包含完整的 Image Discreet Mode v1.2.0 專案原始碼、Manifest V3 設定、README、測試報告、圖示及設定模組測試。已完成的靜態檢查及設定模組測試均通過，但**尚未取得本次需求 A～J 項目的真實 Chrome 互動驗收結果**。請在未受企業政策限制的 Chrome Profile 載入後，依需求清單執行實機驗收，再將其視為正式通過版本。
 
 
-## Version 1.1.0 — Grayscale webpage feature update
+## 本次互動修訂檢查
 
-- Added per-hostname `monochrome` setting (default: false).
-- Added Traditional Chinese / English switch in the Shadow DOM panel.
-- Applies grayscale to `document.body`, leaving the extension host (mounted under `documentElement`, outside body) in color.
-- Saves and restores the original inline body filter value and priority.
-- Reset Default intentionally does not change monochrome mode.
-- Requires real-site verification for fixed/sticky page controls because CSS filter creates a containing block and stacking context.
+- Panel CSS 載入前 Host 設為 `visibility:hidden`，並在 stylesheet `load` / `error` 後解除，避免無樣式首繪造成展開面板閃現。
+- 新頁面初始化流程仍以 `collapsed=true` 並移除 `expanded` 屬性開始。
+- 收合把手文字改為空字串。
+- 自動收合延遲由 1000ms 改為 300ms。
+- 四個 Slider 共用滑鼠滾輪處理，並透過原生 `input` 事件觸發既有即時更新邏輯。
+- 本次仍需使用者在一般 Chrome Profile 進行視覺及實際滾輪操作驗收；靜態檢查不等於實機驗收。
+
+
+## Slider 刻度與滾輪效能修正檢查
+
+- 圖片透明度：0–100%，step 10，共 11 個位置。
+- 圖片模糊：Slider 顯示 0–100%，step 10；轉換為 0–20px 儲存，每格 2px。
+- 圖片縮放：10–200%，step 19，共 11 個等距位置。
+- Panel 透明度：20–100%，step 8，共 11 個等距位置。
+- 四個 Slider 的滑鼠滾輪採 50ms debounce：滾動期間更新 Slider 數值與顯示文字，停止滾動 50ms 後才派發一次 `input` 事件，沿用原本設定儲存及效果套用流程。
+- 本次 JavaScript 語法與既有設定模組測試需重新執行；Chrome 真實滾輪連續操作仍待一般 Chrome Profile 驗收，未標示為 ALL PASS。

@@ -1,407 +1,583 @@
 (() => {
-  'use strict';
+  const IDM = window.__IMAGE_DISCREET_MODE__;
+  if (!IDM || IDM.ImageEngine) return;
 
-  const STYLE_ID = '__idm_image_effect_styles__';
-  const IMAGE_MARKER = 'data-idm-image-target';
-  const BG_MARKER = 'data-idm-bg-source';
-  const BG_OVERLAY_MARKER = 'data-idm-bg-overlay';
-  const INTERNAL_MARKER = 'data-idm-internal';
-  const CUSTOM_PROPERTIES = [
-    '--idm-base-opacity',
-    '--idm-base-filter',
-    '--idm-base-transform',
-    '--idm-base-transform-origin',
-    '--idm-effective-filter',
-    '--idm-effective-transform',
-    '--idm-opacity',
-    '--idm-blur',
-    '--idm-scale',
-    '--idm-visibility'
-  ];
-  const BACKGROUND_PROPERTIES = [
-    'backgroundImage',
-    'backgroundSize',
-    'backgroundPosition',
-    'backgroundRepeat',
-    'backgroundOrigin',
-    'backgroundClip',
-    'backgroundAttachment',
-    'backgroundBlendMode'
+  const BG_MARKER = 'data-idm-bg';
+  const BG_RELATIVE_MARKER = 'data-idm-bg-relative';
+  const IMAGE_PROPERTIES = ['opacity', 'filter', 'transform'];
+  const BACKGROUND_PROPERTIES = ['background-image', 'position', 'isolation'];
+  const BG_VARS = [
+    '--idm-bg-image', '--idm-bg-size', '--idm-bg-position', '--idm-bg-repeat',
+    '--idm-bg-origin', '--idm-bg-clip', '--idm-bg-attachment', '--idm-bg-blend',
+    '--idm-bg-final-opacity', '--idm-bg-final-filter', '--idm-bg-final-transform'
   ];
 
-  const EFFECT_STYLE_TEXT = `
-    [${IMAGE_MARKER}="1"] {
-      opacity: calc(var(--idm-base-opacity, 1) * var(--idm-opacity, 1)) !important;
-      filter: var(--idm-effective-filter, none) !important;
-      visibility: var(--idm-visibility, visible) !important;
-      transform: var(--idm-effective-transform, none) !important;
-      transform-origin: var(--idm-base-transform-origin, 50% 50%) !important;
-    }
-    [${BG_MARKER}="1"] {
-      background-image: none !important;
-      isolation: isolate !important;
-    }
-    [data-idm-bg-needs-position="1"] {
-      position: relative !important;
-    }
-    [${BG_OVERLAY_MARKER}="1"] {
-      position: absolute !important;
-      inset: 0 !important;
-      z-index: -1 !important;
-      display: block !important;
-      margin: 0 !important;
-      padding: 0 !important;
-      border: 0 !important;
-      pointer-events: none !important;
-      background-color: transparent !important;
-      opacity: var(--idm-opacity, 1) !important;
-      filter: var(--idm-effective-filter, none) !important;
-      visibility: var(--idm-visibility, visible) !important;
-      transform: var(--idm-effective-transform, none) !important;
-      transform-origin: 50% 50% !important;
-    }
-  `;
-
-  function isElement(value) {
-    return value && value.nodeType === Node.ELEMENT_NODE;
-  }
-
-  function isInternal(element) {
-    return !isElement(element) || element.hasAttribute(INTERNAL_MARKER) ||
-      element.hasAttribute(BG_OVERLAY_MARKER);
-  }
+  const imageMap = new WeakMap();
+  const backgroundMap = new WeakMap();
+  const imageStates = new Set();
+  const backgroundStates = new Set();
+  let currentSettings = { ...IDM.Settings.SITE_DEFAULTS };
+  let observer = null;
+  let scanScheduled = false;
+  let running = false;
+  const pendingScanRoots = new Set();
+  const forcedScanRoots = new Set();
+  const observedStylesheetLinks = new WeakSet();
 
   function isImageElement(element) {
-    if (!isElement(element)) return false;
-    if (element.tagName === 'IMG') return true;
-    return element.tagName === 'INPUT' && String(element.getAttribute('type') || '').toLowerCase() === 'image';
+    return element instanceof HTMLImageElement ||
+      (element instanceof HTMLInputElement && element.type.toLowerCase() === 'image');
   }
 
-  function isDefaultEffects(settings) {
-    return !settings.hidden && settings.opacity === 100 && settings.blur === 0 && settings.scale === 100;
+  function isEffectActive() {
+    return currentSettings.hideImages || currentSettings.imageOpacity < 100 || currentSettings.imageBlur > 0;
   }
 
-  function saveInlineCustomProperties(element) {
-    const saved = new Map();
-    for (const property of CUSTOM_PROPERTIES) {
-      saved.set(property, {
+  function isAnyImageEffectActive() {
+    return isEffectActive() || currentSettings.imageScale !== 100;
+  }
+
+  function readDeclarations(element, properties) {
+    const result = new Map();
+    for (const property of properties) {
+      result.set(property, {
         value: element.style.getPropertyValue(property),
         priority: element.style.getPropertyPriority(property)
       });
     }
-    return saved;
+    return result;
   }
 
-  function restoreInlineCustomProperties(element, saved) {
-    if (!saved) return;
-    for (const [property, original] of saved.entries()) {
-      if (original.value) {
-        element.style.setProperty(property, original.value, original.priority);
-      } else {
-        element.style.removeProperty(property);
-      }
+  function writeDeclaration(element, property, declaration) {
+    if (declaration?.value) element.style.setProperty(property, declaration.value, declaration.priority);
+    else element.style.removeProperty(property);
+  }
+
+  function restoreDeclarations(element, saved, properties, state) {
+    for (const property of properties) {
+      writeDeclaration(element, property, saved.get(property));
+      if (state?.appliedProperties) state.appliedProperties[property] = null;
     }
   }
 
-  class ImageEngine {
-    constructor(settings) {
-      this.settings = { ...settings };
-      this.destroyed = false;
-      this.imageStates = new WeakMap();
-      this.bgStates = new WeakMap();
-      this.managedImageNodes = new Set();
-      this.managedBackgroundNodes = new Set();
-      this.observer = null;
-      this.refreshQueued = false;
-      this.styleElement = null;
-      this._onResize = this.queueRefresh.bind(this);
-      this._onLoad = this.onResourceLoad.bind(this);
-      this._onVisibilityChange = this.queueRefresh.bind(this);
-
-      this.installStyle();
-      this.observeDocument();
-      this.bindGlobalEvents();
-      if (!isDefaultEffects(this.settings)) this.refreshAll();
-    }
-
-    installStyle() {
-      if (document.getElementById(STYLE_ID)) return;
-      const style = document.createElement('style');
-      style.id = STYLE_ID;
-      style.textContent = EFFECT_STYLE_TEXT;
-      (document.head || document.documentElement).appendChild(style);
-      this.styleElement = style;
-    }
-
-    observeDocument() {
-      this.observer = new MutationObserver((records) => {
-        if (this.destroyed || isDefaultEffects(this.settings)) return;
-        for (const record of records) {
-          if (record.type === 'attributes') {
-            const target = record.target;
-            if (!isElement(target) || isInternal(target)) continue;
-            if (record.attributeName === 'style') {
-              const imageState = this.imageStates.get(target);
-              if (imageState && imageState.lastStyleText === target.getAttribute('style')) continue;
-            }
-            if (record.attributeName === 'class' || record.attributeName === 'style') {
-              this.processTree(target);
-            } else {
-              this.processElement(target, true, record.attributeName);
-            }
-          } else if (record.type === 'childList') {
-            for (const node of record.removedNodes) {
-              if (isElement(node) && !isInternal(node)) this.cleanupTree(node);
-            }
-            for (const node of record.addedNodes) {
-              if (isElement(node) && !isInternal(node)) this.processTree(node);
-            }
-          }
-        }
-      });
-
-      this.observer.observe(document.documentElement, {
-        subtree: true,
-        childList: true,
-        attributes: true,
-        attributeFilter: [
-          'src', 'srcset', 'type', 'style', 'class', 'hidden',
-          'data-src', 'data-original', 'data-background', 'poster'
-        ]
-      });
-    }
-
-    bindGlobalEvents() {
-      window.addEventListener('resize', this._onResize, { passive: true });
-      window.addEventListener('orientationchange', this._onResize, { passive: true });
-      document.addEventListener('load', this._onLoad, true);
-      document.addEventListener('visibilitychange', this._onVisibilityChange, { passive: true });
-    }
-
-    onResourceLoad(event) {
-      if (this.destroyed || isDefaultEffects(this.settings)) return;
-      const target = event.target;
-      if (isImageElement(target) || isElement(target)) this.processElement(target, true);
-      if (target && target.tagName === 'LINK') this.queueRefresh();
-    }
-
-    setSettings(settings) {
-      this.settings = { ...settings };
-      if (isDefaultEffects(this.settings)) {
-        this.restoreAll();
-      } else {
-        this.refreshAll();
-      }
-    }
-
-    queueRefresh() {
-      if (this.destroyed || this.refreshQueued || isDefaultEffects(this.settings)) return;
-      this.refreshQueued = true;
-      requestAnimationFrame(() => {
-        this.refreshQueued = false;
-        if (!this.destroyed) this.refreshAll();
-      });
-    }
-
-    refreshAll() {
-      if (this.destroyed || isDefaultEffects(this.settings)) return;
-      this.processTree(document.documentElement);
-    }
-
-    processTree(root) {
-      if (!isElement(root) || isInternal(root)) return;
-      this.processElement(root, false);
-      const descendants = root.querySelectorAll('*');
-      for (const element of descendants) {
-        if (!isInternal(element)) this.processElement(element, false);
-      }
-    }
-
-    getBaseComputedStyle(element, marker) {
-      const hadMarker = element.getAttribute(marker);
-      if (hadMarker !== null) element.removeAttribute(marker);
-      const computed = getComputedStyle(element);
-      const values = {
-        opacity: computed.opacity,
-        filter: computed.filter,
-        transform: computed.transform,
-        transformOrigin: computed.transformOrigin,
-        visibility: computed.visibility
+  function capturePageInlineChanges(element, state, properties) {
+    for (const property of properties) {
+      const current = {
+        value: element.style.getPropertyValue(property),
+        priority: element.style.getPropertyPriority(property)
       };
-      if (hadMarker !== null) element.setAttribute(marker, hadMarker);
-      return values;
-    }
-
-    setImageVariables(element, state, base) {
-      const style = element.style;
-      style.setProperty('--idm-base-opacity', base.opacity || '1');
-      const baseFilter = base.filter && base.filter !== 'none' ? `${base.filter} ` : '';
-      const baseTransform = base.transform && base.transform !== 'none' ? `${base.transform} ` : '';
-      style.setProperty('--idm-effective-filter', `${baseFilter}blur(${this.settings.blur}px)`);
-      style.setProperty('--idm-effective-transform', `${baseTransform}scale(${this.settings.scale / 100})`);
-      style.setProperty('--idm-base-transform-origin', base.transformOrigin || '50% 50%');
-      style.setProperty('--idm-opacity', String(this.settings.opacity / 100));
-      style.setProperty('--idm-visibility', this.settings.hidden ? 'hidden' : (base.visibility || 'visible'));
-      state.lastStyleText = element.getAttribute('style');
-    }
-
-    processImageElement(element, forceRefresh, attributeName) {
-      let state = this.imageStates.get(element);
-      const currentStyleText = element.getAttribute('style');
-      if (state && attributeName === 'style' && state.lastStyleText === currentStyleText) return;
-      if (!state) {
-        state = {
-          savedProperties: saveInlineCustomProperties(element),
-          hadMarker: element.hasAttribute(IMAGE_MARKER),
-          originalMarker: element.getAttribute(IMAGE_MARKER),
-          lastStyleText: null
-        };
-        this.imageStates.set(element, state);
-        this.managedImageNodes.add(element);
+      const applied = state.appliedProperties[property];
+      if (!applied || current.value !== applied.value || current.priority !== applied.priority) {
+        state.savedDeclarations.set(property, current);
       }
-      const base = this.getBaseComputedStyle(element, IMAGE_MARKER);
-      if (!element.hasAttribute(IMAGE_MARKER)) element.setAttribute(IMAGE_MARKER, '1');
-      this.setImageVariables(element, state, base);
     }
+  }
 
-    copyBackgroundProperties(source, overlay) {
-      const hadMarker = source.getAttribute(BG_MARKER);
-      if (hadMarker !== null) source.removeAttribute(BG_MARKER);
-      const computed = getComputedStyle(source);
-      for (const property of BACKGROUND_PROPERTIES) {
-        overlay.style[property] = computed[property];
-      }
-      overlay.style.borderRadius = computed.borderRadius;
-      overlay.style.opacity = String(this.settings.opacity / 100);
-      // Existing filter/opacity on the source already affects its full rendered subtree.
-      overlay.style.filter = `blur(${this.settings.blur}px)`;
-      overlay.style.transform = `scale(${this.settings.scale / 100})`;
-      overlay.style.visibility = this.settings.hidden ? 'hidden' : 'visible';
-      overlay.style.setProperty('--idm-opacity', String(this.settings.opacity / 100));
-      overlay.style.setProperty('--idm-effective-filter', `blur(${this.settings.blur}px)`);
-      overlay.style.setProperty('--idm-effective-transform', `scale(${this.settings.scale / 100})`);
-      overlay.style.setProperty('--idm-visibility', this.settings.hidden ? 'hidden' : 'visible');
-      if (hadMarker !== null) source.setAttribute(BG_MARKER, hadMarker);
+  function setManagedProperty(element, state, property, value) {
+    if (value == null) {
+      writeDeclaration(element, property, state.savedDeclarations.get(property));
+      state.appliedProperties[property] = null;
+      return;
     }
+    const stringValue = String(value);
+    element.style.setProperty(property, stringValue, 'important');
+    state.appliedProperties[property] = { value: stringValue, priority: 'important' };
+  }
 
-    processBackgroundElement(element) {
-      if (element === document.documentElement || element === document.body) return;
-      let state = this.bgStates.get(element);
-      const hadMarker = element.getAttribute(BG_MARKER);
-      if (hadMarker !== null) element.removeAttribute(BG_MARKER);
-      const computed = getComputedStyle(element);
-      const imageValue = computed.backgroundImage;
-      if (hadMarker !== null) element.setAttribute(BG_MARKER, hadMarker);
+  function getStyleSnapshot(element) {
+    return element.getAttribute('style') || '';
+  }
 
-      const hasBackgroundImage = imageValue && imageValue !== 'none';
-      if (!hasBackgroundImage) {
-        if (state) this.removeBackgroundState(element, state);
+  function captureImageBase(state) {
+    restoreDeclarations(state.element, state.savedDeclarations, IMAGE_PROPERTIES, state);
+    const computed = getComputedStyle(state.element);
+    state.base = {
+      opacity: Number.parseFloat(computed.opacity) || 0,
+      filter: computed.filter || 'none',
+      transform: computed.transform || 'none'
+    };
+    state.lastStyleSnapshot = getStyleSnapshot(state.element);
+  }
+
+  function imageEffectValues(state) {
+    const reveal = state.temporaryReveal || state.pinnedVisible;
+    const opacityFactor = reveal ? 1 : (currentSettings.hideImages ? 0 : currentSettings.imageOpacity / 100);
+    const blur = reveal ? 0 : currentSettings.imageBlur;
+    const scale = currentSettings.imageScale / 100;
+    const originalFilter = state.base.filter === 'none' ? '' : state.base.filter;
+    const finalFilter = [originalFilter, blur > 0 ? `blur(${blur}px)` : ''].filter(Boolean).join(' ') || null;
+    const finalTransform = scale === 1
+      ? null
+      : (state.base.transform === 'none' ? `scale(${scale})` : `${state.base.transform} scale(${scale})`);
+    return {
+      opacity: opacityFactor < 1 ? state.base.opacity * opacityFactor : null,
+      filter: blur > 0 ? finalFilter : null,
+      transform: finalTransform
+    };
+  }
+
+  function applyImage(state) {
+    const element = state.element;
+    if (!element.isConnected) return;
+    if (state.lastStyleSnapshot !== getStyleSnapshot(element)) {
+      capturePageInlineChanges(element, state, IMAGE_PROPERTIES);
+      captureImageBase(state);
+    }
+    if (!isAnyImageEffectActive()) {
+      restoreDeclarations(element, state.savedDeclarations, IMAGE_PROPERTIES, state);
+      state.lastStyleSnapshot = getStyleSnapshot(element);
+      return;
+    }
+    const values = imageEffectValues(state);
+    for (const property of IMAGE_PROPERTIES) setManagedProperty(element, state, property, values[property]);
+    state.lastStyleSnapshot = getStyleSnapshot(element);
+  }
+
+  function attachImage(element) {
+    if (imageMap.has(element) || !isAnyImageEffectActive()) return imageMap.get(element) || null;
+    const state = {
+      element,
+      base: null,
+      temporaryReveal: false,
+      pinnedVisible: false,
+      savedDeclarations: readDeclarations(element, IMAGE_PROPERTIES),
+      appliedProperties: { opacity: null, filter: null, transform: null },
+      lastStyleSnapshot: getStyleSnapshot(element)
+    };
+    imageMap.set(element, state);
+    imageStates.add(state);
+    captureImageBase(state);
+    applyImage(state);
+    return state;
+  }
+
+  function detachImage(state) {
+    if (state.lastStyleSnapshot !== getStyleSnapshot(state.element)) {
+      capturePageInlineChanges(state.element, state, IMAGE_PROPERTIES);
+    }
+    restoreDeclarations(state.element, state.savedDeclarations, IMAGE_PROPERTIES, state);
+    imageMap.delete(state.element);
+    imageStates.delete(state);
+  }
+
+  function hasBlockingPositionedDescendant(element) {
+    for (const descendant of element.querySelectorAll('*')) {
+      if (getComputedStyle(descendant).position === 'absolute') return true;
+    }
+    return false;
+  }
+
+  function readBackgroundBase(state) {
+    const element = state.element;
+    const hadMarker = element.hasAttribute(BG_MARKER);
+    const hadRelative = element.hasAttribute(BG_RELATIVE_MARKER);
+    if (hadMarker) element.removeAttribute(BG_MARKER);
+    if (hadRelative) element.removeAttribute(BG_RELATIVE_MARKER);
+    restoreDeclarations(element, state.savedDeclarations, BACKGROUND_PROPERTIES, state);
+
+    const computed = getComputedStyle(element);
+    const before = getComputedStyle(element, '::before');
+    const display = computed.display;
+    const attachment = computed.backgroundAttachment || 'scroll';
+    const clip = computed.backgroundClip || 'border-box';
+    const beforeContent = before.content;
+    const position = computed.position;
+    const unsupportedDisplay = display === 'inline' || display === 'contents' ||
+      display === 'table-row' || display === 'table-cell' || display === 'table-column' ||
+      display === 'table-column-group' || display === 'table-header-group' ||
+      display === 'table-footer-group';
+    const beforeAlreadyUsed = beforeContent !== 'none' && beforeContent !== 'normal';
+    const unsupportedBackground = attachment.split(',').some((value) => /fixed|local/.test(value.trim())) ||
+      clip.split(',').some((value) => value.trim() === 'text');
+    const unsafePositioning = position === 'static' && hasBlockingPositionedDescendant(element);
+
+    state.base = {
+      image: computed.backgroundImage,
+      size: computed.backgroundSize,
+      position: computed.backgroundPosition,
+      repeat: computed.backgroundRepeat,
+      origin: computed.backgroundOrigin,
+      clip: computed.backgroundClip,
+      attachment,
+      blend: computed.backgroundBlendMode,
+      positionMode: position,
+      eligible: !unsupportedDisplay && !beforeAlreadyUsed && !unsupportedBackground && !unsafePositioning &&
+        computed.backgroundImage !== 'none' && computed.backgroundImage !== ''
+    };
+
+    if (hadRelative) element.setAttribute(BG_RELATIVE_MARKER, '1');
+    if (hadMarker) element.setAttribute(BG_MARKER, '1');
+    state.lastStyleSnapshot = getStyleSnapshot(element);
+  }
+
+  function backgroundEffectValues(state) {
+    const reveal = state.temporaryReveal || state.pinnedVisible;
+    const opacity = reveal ? 1 : (currentSettings.hideImages ? 0 : currentSettings.imageOpacity / 100);
+    const blur = reveal ? 0 : currentSettings.imageBlur;
+    const scale = currentSettings.imageScale / 100;
+    return {
+      '--idm-bg-image': state.base.image,
+      '--idm-bg-size': state.base.size,
+      '--idm-bg-position': state.base.position,
+      '--idm-bg-repeat': state.base.repeat,
+      '--idm-bg-origin': state.base.origin,
+      '--idm-bg-clip': state.base.clip,
+      '--idm-bg-attachment': state.base.attachment,
+      '--idm-bg-blend': state.base.blend,
+      '--idm-bg-final-opacity': opacity,
+      '--idm-bg-final-filter': blur > 0 ? `blur(${blur}px)` : 'none',
+      '--idm-bg-final-transform': scale === 1 ? 'none' : `scale(${scale})`
+    };
+  }
+
+  function setBackgroundVars(element, values) {
+    for (const [property, value] of Object.entries(values)) element.style.setProperty(property, String(value));
+  }
+
+  function restoreBackgroundVars(state) {
+    for (const [property, original] of state.savedVars) {
+      if (original.value) state.element.style.setProperty(property, original.value, original.priority);
+      else state.element.style.removeProperty(property);
+    }
+  }
+
+  function applyBackground(state) {
+    const element = state.element;
+    if (!element.isConnected) return;
+    if (state.lastStyleSnapshot !== getStyleSnapshot(element)) {
+      capturePageInlineChanges(element, state, BACKGROUND_PROPERTIES);
+      readBackgroundBase(state);
+      if (!state.base.eligible) {
+        detachBackground(state);
         return;
       }
-
-      if (!state) {
-        const overlay = document.createElement('div');
-        overlay.setAttribute(BG_OVERLAY_MARKER, '1');
-        overlay.setAttribute(INTERNAL_MARKER, '1');
-        overlay.setAttribute('aria-hidden', 'true');
-        overlay.setAttribute('role', 'presentation');
-        element.appendChild(overlay);
-        const computedPosition = getComputedStyle(element).position;
-        state = {
-          overlay,
-          hadMarker: element.hasAttribute(BG_MARKER),
-          originalMarker: element.getAttribute(BG_MARKER),
-          hadPositionMarker: element.hasAttribute('data-idm-bg-needs-position'),
-          originalPositionMarker: element.getAttribute('data-idm-bg-needs-position'),
-          needsPosition: computedPosition === 'static'
-        };
-        this.bgStates.set(element, state);
-        this.managedBackgroundNodes.add(element);
-      }
-
-      if (!element.hasAttribute(BG_MARKER)) element.setAttribute(BG_MARKER, '1');
-      if (state.needsPosition) element.setAttribute('data-idm-bg-needs-position', '1');
-      // The marker hides only the element's background-image; the absolute child paints it separately.
-      this.copyBackgroundProperties(element, state.overlay);
+    }
+    if (!isAnyImageEffectActive()) {
+      element.removeAttribute(BG_MARKER);
+      element.removeAttribute(BG_RELATIVE_MARKER);
+      restoreDeclarations(element, state.savedDeclarations, BACKGROUND_PROPERTIES, state);
+      restoreBackgroundVars(state);
+      state.lastStyleSnapshot = getStyleSnapshot(element);
+      return;
     }
 
-    cleanupTree(root) {
-      if (!isElement(root)) return;
-      const candidates = [root, ...root.querySelectorAll('*')];
-      for (const element of candidates) {
-        const imageState = this.imageStates.get(element);
-        if (imageState) this.removeImageState(element, imageState);
-        const bgState = this.bgStates.get(element);
-        if (bgState) this.removeBackgroundState(element, bgState);
+    element.setAttribute(BG_MARKER, '1');
+    setManagedProperty(element, state, 'background-image', 'none');
+    setManagedProperty(element, state, 'isolation', 'isolate');
+    if (state.base.positionMode === 'static') {
+      element.setAttribute(BG_RELATIVE_MARKER, '1');
+      setManagedProperty(element, state, 'position', 'relative');
+    } else {
+      element.removeAttribute(BG_RELATIVE_MARKER);
+      setManagedProperty(element, state, 'position', null);
+    }
+    setBackgroundVars(element, backgroundEffectValues(state));
+    state.lastStyleSnapshot = getStyleSnapshot(element);
+  }
+
+  function attachBackground(element) {
+    if (backgroundMap.has(element) || element.hasAttribute(BG_MARKER) || !isAnyImageEffectActive()) {
+      return backgroundMap.get(element) || null;
+    }
+    const state = {
+      element,
+      base: null,
+      temporaryReveal: false,
+      pinnedVisible: false,
+      savedDeclarations: readDeclarations(element, BACKGROUND_PROPERTIES),
+      appliedProperties: { 'background-image': null, position: null, isolation: null },
+      savedVars: readDeclarations(element, BG_VARS),
+      lastStyleSnapshot: getStyleSnapshot(element)
+    };
+    backgroundMap.set(element, state);
+    backgroundStates.add(state);
+    readBackgroundBase(state);
+    if (!state.base.eligible) {
+      detachBackground(state);
+      return null;
+    }
+    applyBackground(state);
+    return state;
+  }
+
+  function detachBackground(state) {
+    const element = state.element;
+    if (state.lastStyleSnapshot !== getStyleSnapshot(element)) {
+      capturePageInlineChanges(element, state, BACKGROUND_PROPERTIES);
+    }
+    element.removeAttribute(BG_MARKER);
+    element.removeAttribute(BG_RELATIVE_MARKER);
+    restoreDeclarations(element, state.savedDeclarations, BACKGROUND_PROPERTIES, state);
+    restoreBackgroundVars(state);
+    backgroundMap.delete(element);
+    backgroundStates.delete(state);
+  }
+
+  function processImage(element, forceRefresh = false) {
+    if (!isImageElement(element)) return;
+    const existing = imageMap.get(element);
+    if (existing) {
+      if (forceRefresh || existing.lastStyleSnapshot !== getStyleSnapshot(element)) {
+        capturePageInlineChanges(element, existing, IMAGE_PROPERTIES);
+        captureImageBase(existing);
+        applyImage(existing);
       }
+      return;
+    }
+    attachImage(element);
+  }
+
+  function processBackground(element, forceRefresh = false) {
+    if (!(element instanceof Element) || element === document.documentElement || element === document.body) return;
+    const existing = backgroundMap.get(element);
+    if (existing && !forceRefresh) {
+      if (existing.lastStyleSnapshot !== getStyleSnapshot(element)) {
+        capturePageInlineChanges(element, existing, BACKGROUND_PROPERTIES);
+        readBackgroundBase(existing);
+        if (!existing.base.eligible) detachBackground(existing);
+        else applyBackground(existing);
+      }
+      return;
+    }
+    if (existing && forceRefresh) {
+      capturePageInlineChanges(element, existing, BACKGROUND_PROPERTIES);
+      readBackgroundBase(existing);
+      if (!existing.base.eligible) {
+        detachBackground(existing);
+        return;
+      }
+      applyBackground(existing);
+      return;
     }
 
-    processElement(element, forceRefresh = false, attributeName = null) {
-      if (this.destroyed || !isElement(element) || isInternal(element)) return;
+    if (!isAnyImageEffectActive()) return;
+    const computed = getComputedStyle(element);
+    if (!computed.backgroundImage || computed.backgroundImage === 'none') return;
+    attachBackground(element);
+  }
 
-      if (isImageElement(element)) {
-        this.processImageElement(element, forceRefresh, attributeName);
-      }
-
-      this.processBackgroundElement(element);
+  function processElement(element, forceRefresh = false) {
+    if (!(element instanceof Element)) return;
+    if (isImageElement(element)) {
+      processImage(element, forceRefresh);
+      return;
     }
+    const staleImage = imageMap.get(element);
+    if (staleImage) detachImage(staleImage);
+    processBackground(element, forceRefresh);
+  }
 
-    removeImageState(element, state) {
-      if (!state) return;
-      if (state.hadMarker) {
-        element.setAttribute(IMAGE_MARKER, state.originalMarker || '');
+  function scan(root = document, forceRefresh = false) {
+    if (!running || !isAnyImageEffectActive()) return;
+    if (root instanceof Element) processElement(root, forceRefresh);
+    const nodes = root.querySelectorAll?.('img, input[type="image"], *') || [];
+    for (const element of nodes) processElement(element, forceRefresh);
+  }
+
+  function scheduleScan(root = document, forceRefresh = false) {
+    const normalizedRoot = root instanceof Element ? root : document;
+    pendingScanRoots.add(normalizedRoot);
+    if (forceRefresh) forcedScanRoots.add(normalizedRoot);
+    if (scanScheduled) return;
+    scanScheduled = true;
+    requestAnimationFrame(() => {
+      scanScheduled = false;
+      const roots = [...pendingScanRoots];
+      const forcedRoots = new Set(forcedScanRoots);
+      pendingScanRoots.clear();
+      forcedScanRoots.clear();
+      if (roots.includes(document) || roots.some((item) => !item.isConnected)) {
+        scan(document, forcedRoots.has(document));
       } else {
-        element.removeAttribute(IMAGE_MARKER);
+        for (const item of roots) scan(item, forcedRoots.has(item));
       }
-      restoreInlineCustomProperties(element, state.savedProperties);
-      this.imageStates.delete(element);
-      this.managedImageNodes.delete(element);
-    }
+    });
+  }
 
-    removeBackgroundState(element, state) {
-      if (!state) return;
-      if (state.overlay && state.overlay.parentNode === element) state.overlay.remove();
-      if (state.hadMarker) {
-        element.setAttribute(BG_MARKER, state.originalMarker || '');
-      } else {
-        element.removeAttribute(BG_MARKER);
-      }
-      if (state.hadPositionMarker) {
-        element.setAttribute('data-idm-bg-needs-position', state.originalPositionMarker || '');
-      } else {
-        element.removeAttribute('data-idm-bg-needs-position');
-      }
-      this.bgStates.delete(element);
-      this.managedBackgroundNodes.delete(element);
-    }
-
-    restoreAll() {
-      if (this.destroyed) return;
-      for (const element of Array.from(this.managedImageNodes)) {
-        const state = this.imageStates.get(element);
-        this.removeImageState(element, state);
-      }
-      for (const element of Array.from(this.managedBackgroundNodes)) {
-        const state = this.bgStates.get(element);
-        this.removeBackgroundState(element, state);
-      }
-      // Clean up any stale overlay left after a page-side DOM replacement.
-      document.querySelectorAll(`[${BG_OVERLAY_MARKER}]`).forEach((node) => node.remove());
-    }
-
-    destroy() {
-      if (this.destroyed) return;
-      this.restoreAll();
-      this.destroyed = true;
-      if (this.observer) this.observer.disconnect();
-      window.removeEventListener('resize', this._onResize);
-      window.removeEventListener('orientationchange', this._onResize);
-      document.removeEventListener('load', this._onLoad, true);
-      document.removeEventListener('visibilitychange', this._onVisibilityChange);
-      const style = document.getElementById(STYLE_ID);
-      if (style) style.remove();
+  function observeStylesheetLinks(root) {
+    if (!(root instanceof Element || root instanceof Document)) return;
+    const links = [];
+    if (root instanceof HTMLLinkElement && root.relList.contains('stylesheet')) links.push(root);
+    for (const link of root.querySelectorAll?.('link[rel~="stylesheet"]') || []) links.push(link);
+    for (const link of links) {
+      if (observedStylesheetLinks.has(link)) continue;
+      observedStylesheetLinks.add(link);
+      link.addEventListener('load', () => scheduleScan(document, true), { once: true });
+      if (link.sheet) scheduleScan(document, true);
     }
   }
 
-  window.IDMImageEngine = ImageEngine;
+  function handleMutations(records) {
+    for (const record of records) {
+      if (record.type === 'childList') {
+        for (const node of record.addedNodes) {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            observeStylesheetLinks(node);
+            if (node instanceof HTMLStyleElement) scheduleScan(document, true);
+            else scheduleScan(node);
+          }
+        }
+        if (record.target instanceof HTMLStyleElement) scheduleScan(document, true);
+        continue;
+      }
+      if (record.type !== 'attributes') continue;
+      const target = record.target;
+      if (!(target instanceof Element)) continue;
+
+      if (record.attributeName === 'style') {
+        if (target === document.documentElement || target === document.body) scheduleScan(document, true);
+        const imageState = imageMap.get(target);
+        if (imageState && imageState.lastStyleSnapshot !== getStyleSnapshot(target)) {
+          capturePageInlineChanges(target, imageState, IMAGE_PROPERTIES);
+          captureImageBase(imageState);
+          applyImage(imageState);
+        }
+        const bgState = backgroundMap.get(target);
+        if (bgState && bgState.lastStyleSnapshot !== getStyleSnapshot(target)) {
+          capturePageInlineChanges(target, bgState, BACKGROUND_PROPERTIES);
+          readBackgroundBase(bgState);
+          if (!bgState.base.eligible) detachBackground(bgState);
+          else applyBackground(bgState);
+        } else if (!bgState) {
+          processBackground(target, true);
+        }
+      } else if (record.attributeName === 'class') {
+        if (target === document.documentElement || target === document.body) scheduleScan(document, true);
+        const imageState = imageMap.get(target);
+        if (imageState) {
+          capturePageInlineChanges(target, imageState, IMAGE_PROPERTIES);
+          captureImageBase(imageState);
+          applyImage(imageState);
+        }
+        processBackground(target, true);
+      } else if (record.attributeName === 'src' || record.attributeName === 'srcset' || record.attributeName === 'type') {
+        processElement(target);
+      }
+    }
+    pruneDisconnected();
+  }
+
+  function pruneDisconnected() {
+    for (const state of [...imageStates]) {
+      if (!state.element.isConnected) detachImage(state);
+    }
+    for (const state of [...backgroundStates]) {
+      if (!state.element.isConnected) detachBackground(state);
+    }
+  }
+
+  function applyAll() {
+    for (const state of imageStates) applyImage(state);
+    for (const state of backgroundStates) applyBackground(state);
+    scheduleScan(document);
+  }
+
+  function setSettings(settings) {
+    currentSettings = IDM.Settings.validateSite(settings);
+    applyAll();
+  }
+
+  function findTargetFromNode(node) {
+    let element = node instanceof Element ? node : node?.parentElement;
+    while (element && element !== document.documentElement) {
+      if (isImageElement(element) && imageMap.has(element)) return element;
+      if (backgroundMap.has(element) && element.getAttribute(BG_MARKER) === '1') return element;
+      element = element.parentElement;
+    }
+    return null;
+  }
+
+  function isActionableTarget(element) {
+    return Boolean(element && isEffectActive() && (imageMap.has(element) || backgroundMap.has(element)));
+  }
+
+  function setTemporaryReveal(element, value) {
+    const state = imageMap.get(element) || backgroundMap.get(element);
+    if (!state) return;
+    state.temporaryReveal = Boolean(value);
+    if (imageMap.has(element)) applyImage(state);
+    else applyBackground(state);
+  }
+
+  function togglePinned(element) {
+    const state = imageMap.get(element) || backgroundMap.get(element);
+    if (!state) return false;
+    state.pinnedVisible = !state.pinnedVisible;
+    if (imageMap.has(element)) applyImage(state);
+    else applyBackground(state);
+    return state.pinnedVisible;
+  }
+
+  function isPinned(element) {
+    const state = imageMap.get(element) || backgroundMap.get(element);
+    return Boolean(state?.pinnedVisible);
+  }
+
+  function clearExceptions() {
+    for (const state of imageStates) {
+      state.temporaryReveal = false;
+      state.pinnedVisible = false;
+      applyImage(state);
+    }
+    for (const state of backgroundStates) {
+      state.temporaryReveal = false;
+      state.pinnedVisible = false;
+      applyBackground(state);
+    }
+  }
+
+  function onViewportChange() {
+    scheduleScan(document, true);
+  }
+
+  function start() {
+    if (running || !IDM.isSupportedPage()) return;
+    running = true;
+    observer = new MutationObserver(handleMutations);
+    observer.observe(document.documentElement, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ['src', 'srcset', 'type', 'style', 'class']
+    });
+    observeStylesheetLinks(document);
+    document.addEventListener('DOMContentLoaded', onViewportChange, { once: true });
+    window.addEventListener('load', onViewportChange, { once: true });
+    window.addEventListener('resize', onViewportChange, { passive: true });
+    window.addEventListener('orientationchange', onViewportChange, { passive: true });
+    scan(document);
+  }
+
+  function stop() {
+    running = false;
+    observer?.disconnect();
+    document.removeEventListener('DOMContentLoaded', onViewportChange);
+    window.removeEventListener('load', onViewportChange);
+    window.removeEventListener('resize', onViewportChange);
+    window.removeEventListener('orientationchange', onViewportChange);
+    observer = null;
+    for (const state of [...imageStates]) detachImage(state);
+    for (const state of [...backgroundStates]) detachBackground(state);
+    imageStates.clear();
+    backgroundStates.clear();
+    scanScheduled = false;
+    pendingScanRoots.clear();
+    forcedScanRoots.clear();
+  }
+
+  IDM.ImageEngine = {
+    start,
+    stop,
+    scan,
+    setSettings,
+    isEffectActive,
+    isAnyImageEffectActive,
+    findTargetFromNode,
+    isActionableTarget,
+    setTemporaryReveal,
+    togglePinned,
+    isPinned,
+    clearExceptions,
+    getSettings: () => ({ ...currentSettings })
+  };
 })();

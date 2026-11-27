@@ -1,0 +1,196 @@
+:host {
+  all: initial;
+  color-scheme: light;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+* { box-sizing: border-box; }
+
+.idm-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 300px;
+  max-height: 82vh;
+  overflow: auto;
+  border: 1px solid var(--idm-border);
+  border-radius: 14px;
+  background: var(--idm-bg);
+  color: var(--idm-text);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .24);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  transform: translateX(105%);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 220ms cubic-bezier(.2,.75,.25,1), opacity 180ms ease;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+}
+
+:host([expanded]) .idm-panel {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.idm-panel.light {
+  --idm-bg: rgba(250, 251, 253, .96);
+  --idm-text: #20242a;
+  --idm-muted: #636b75;
+  --idm-border: rgba(30, 41, 59, .16);
+  --idm-control-bg: #ffffff;
+  --idm-control-border: #cbd2dc;
+  --idm-accent: #2867c7;
+  --idm-button-bg: #e9eef6;
+  --idm-button-text: #263447;
+  --idm-danger-bg: #fff0ed;
+  --idm-danger-text: #a52e22;
+}
+
+.idm-panel.dark {
+  --idm-bg: rgba(31, 35, 42, .97);
+  --idm-text: #f1f3f5;
+  --idm-muted: #b1bac5;
+  --idm-border: rgba(226, 232, 240, .18);
+  --idm-control-bg: #292f38;
+  --idm-control-border: #596372;
+  --idm-accent: #78a9ff;
+  --idm-button-bg: #3b4553;
+  --idm-button-text: #f4f6f8;
+  --idm-danger-bg: #512e2d;
+  --idm-danger-text: #ffd7d2;
+}
+
+.idm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 28px 10px 12px;
+  border-bottom: 1px solid var(--idm-border);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.idm-header:active { cursor: grabbing; }
+.idm-title { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .1px; }
+.idm-header-actions { display: flex; align-items: center; gap: 5px; }
+.idm-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 27px;
+  height: 27px;
+  border: 1px solid var(--idm-control-border);
+  border-radius: 8px;
+  background: var(--idm-button-bg);
+  color: var(--idm-button-text);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+.idm-icon-button:hover { filter: brightness(.96); }
+
+.idm-controls { display: flex; flex-direction: column; gap: 11px; padding: 12px 28px 12px 12px; }
+.idm-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 25px; }
+.idm-label { color: var(--idm-text); font-size: 12px; font-weight: 600; }
+.idm-muted { color: var(--idm-muted); font-size: 11px; }
+.idm-switch { position: relative; display: inline-flex; flex: 0 0 auto; width: 38px; height: 21px; }
+.idm-switch input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.idm-switch-track { width: 38px; height: 21px; border-radius: 20px; background: #8b929c; transition: background .15s; cursor: pointer; }
+.idm-switch-track::after { content: ""; display: block; width: 15px; height: 15px; margin: 3px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.idm-switch input:checked + .idm-switch-track { background: var(--idm-accent); }
+.idm-switch input:checked + .idm-switch-track::after { transform: translateX(17px); }
+.idm-switch input:focus-visible + .idm-switch-track { outline: 2px solid var(--idm-accent); outline-offset: 2px; }
+
+.idm-range-block { display: flex; flex-direction: column; gap: 5px; }
+.idm-range-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.idm-value { min-width: 40px; color: var(--idm-muted); font-size: 11px; font-variant-numeric: tabular-nums; text-align: right; }
+.idm-range { width: 100%; height: 16px; margin: 0; accent-color: var(--idm-accent); cursor: pointer; }
+.idm-separator { height: 1px; background: var(--idm-border); }
+.idm-button {
+  width: 100%; min-height: 33px; padding: 7px 10px;
+  border: 1px solid var(--idm-control-border); border-radius: 8px;
+  background: var(--idm-button-bg); color: var(--idm-button-text);
+  font: inherit; font-size: 12px; font-weight: 650; cursor: pointer;
+}
+.idm-button:hover { filter: brightness(.96); }
+.idm-button.danger { background: var(--idm-danger-bg); color: var(--idm-danger-text); border-color: transparent; }
+.idm-theme-button { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.idm-theme-hint { color: var(--idm-muted); font-size: 10px; font-weight: 500; }
+
+.idm-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 74px;
+  border: 1px solid var(--idm-border);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: rgba(248, 250, 252, .96);
+  color: #303846;
+  box-shadow: 0 3px 14px rgba(0,0,0,.18);
+  writing-mode: vertical-rl;
+  font-size: 10px;
+  letter-spacing: 1px;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 140ms ease;
+}
+.idm-handle.dark { background: rgba(34, 39, 47, .97); color: #f1f3f5; }
+:host([expanded]) .idm-handle {
+  color: transparent;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  font-size: 0;
+  pointer-events: auto;
+}
+:host([expanded]) .idm-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 3px;
+  height: 74px;
+  border-radius: 3px;
+  background: var(--idm-muted);
+  opacity: .55;
+  pointer-events: none;
+}
+
+.single-action-layer { position: fixed; inset: 0; pointer-events: none; }
+.single-action-button {
+  position: fixed;
+  display: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid rgba(255,255,255,.9);
+  border-radius: 50%;
+  background: rgba(28, 35, 46, .88);
+  color: white;
+  font-family: Arial, sans-serif;
+  font-size: 16px;
+  line-height: 28px;
+  text-align: center;
+  box-shadow: 0 2px 9px rgba(0,0,0,.35);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+}
+.single-action-button:hover { background: rgba(35, 105, 190, .96); }
+.single-action-button.is-pinned { background: rgba(28, 132, 82, .95); }
+.single-action-button:focus-visible { outline: 2px solid #75b7ff; outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .idm-panel, .idm-switch-track, .idm-switch-track::after { transition: none; }
+}
